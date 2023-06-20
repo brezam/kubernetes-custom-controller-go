@@ -46,7 +46,7 @@ Issue the following commands --- starting in whatever working directory you like
 
 ```sh
 git clone https://github.com/bruno-zamariola/kubernetes-custom-controller.git
-cd kubernetes-custom-controller/batata/feijao
+cd kubernetes-custom-controller
 ```
 
 Note, however, that if you intend to

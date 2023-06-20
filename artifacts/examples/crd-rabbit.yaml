@@ -1,0 +1,62 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: rabbits.brunoz.cloudopsintegration.com
+spec:
+  group: brunoz.cloudopsintegration.com
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        # schema used for validation
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                instanceType:
+                  type: string
+                  minLength: 1
+                vhost:
+                  type: string
+                  minLength: 1
+                username:
+                  type: string
+                  minLength: 1
+                password:
+                  type: object
+                  x-kubernetes-validations:
+                  - rule: 'self.type == "random" || (self.type == "inline" && size(self.value) > 0)'
+                    message: "If field type equals 'inline' you need to have field 'value'"
+                  - rule: 'self.type == "inline" || (self.type == "random" && !has(self.value))'
+                    message: "If field type equals 'random' you cannot have field 'value'"
+                  properties:
+                    type:
+                      type: string
+                      pattern: '^random|inline$'
+                    value:
+                      type: string
+                  required:
+                  - type
+              required:
+              - instanceType
+              - vhost
+              - username
+              - password
+            status:
+              type: object
+              properties:
+                error:
+                  type: boolean
+                errorMessage:
+                  type: string
+      # subresources for the custom resource
+      subresources:
+        # enables the status subresource
+        status: {}
+  names:
+    kind: Rabbit
+    plural: rabbits
+  scope: Namespaced
