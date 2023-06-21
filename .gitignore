@@ -5,5 +5,9 @@
 .DS_Store
 
 # Binary that might be generated
-/batata/feijao/samplecontroller
-/batata/feijao/vendor
+/vendor
+
+# Credentials file
+/resourcesrestapi/cloudamqpbar/cloudamqp-bar-credentials.json
+/pkg/generated
+/pkg/apis/**/zz_generated.deepcopy.go

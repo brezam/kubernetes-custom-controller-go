@@ -1,0 +1,10 @@
+apiVersion: brunoz.cloudopsintegration.com/v1alpha1
+kind: Rabbit
+metadata:
+  name: example-rabbit
+spec:
+  instanceType: shared
+  vhost: bees-sit-eastus
+  username: test-449856347
+  password:
+    type: random
