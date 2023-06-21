@@ -5,6 +5,6 @@ metadata:
 spec:
   instanceType: shared
   vhost: bees-sit-eastus
-  username: test-449856347
+  username: test-12345
   password:
     type: random
