@@ -1,4 +1,4 @@
-package main
+package controllers
 
 import (
 	"context"
@@ -110,7 +110,7 @@ func NewController(
 		secretsSynced:   secretInformer.Informer().HasSynced,
 		rabbitLister:    rabbitInformer.Lister(),
 		rabbitSynced:    rabbitInformer.Informer().HasSynced,
-		workqueue:       workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Rabbits"),
+		workqueue:       workqueue.NewRateLimitingQueueWithConfig(workqueue.DefaultControllerRateLimiter(), workqueue.RateLimitingQueueConfig{Name: "Rabbits"}),
 		recorder:        recorder,
 	}
 
@@ -131,9 +131,9 @@ func NewController(
 	secretInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.handleSecretResource,
 		UpdateFunc: func(old, new interface{}) {
-			newDepl := new.(*corev1.Secret)
-			oldDepl := old.(*corev1.Secret)
-			if newDepl.ResourceVersion == oldDepl.ResourceVersion {
+			newSecret := new.(*corev1.Secret)
+			oldSecret := old.(*corev1.Secret)
+			if newSecret.ResourceVersion == oldSecret.ResourceVersion {
 				// Periodic resync will send update events for all known Secrets.
 				// Two different versions of the same Secret will always have different RVs.
 				return
@@ -247,7 +247,7 @@ func (c *Controller) processNextWorkItem(ctx context.Context) bool {
 // with the current status of the resource.
 func (c *Controller) syncHandler(ctx context.Context, key string) error {
 	logger := klog.LoggerWithValues(klog.FromContext(ctx), "resourceName", key)
-
+	logger.Info("Starting syncHandler!!")
 	// Convert the namespace/name string into a distinct namespace and name
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
@@ -275,16 +275,13 @@ func (c *Controller) syncHandler(ctx context.Context, key string) error {
 	if permissions == nil {
 		permissions = &samplev1alpha1.RabbitPermissions{Read: ".*", Write: ".*", Configure: ".*"}
 	}
-	if permissions.Read == "" || permissions.Write == "" || permissions.Configure == "" {
-		c.updateRabbitStatus(rabbit, true, ErrSpecMisconfigured)
-		c.recorder.Event(rabbit, corev1.EventTypeWarning, ErrSpecMisconfigured, PermissionFieldsAreBlank)
-		utilruntime.HandleError(fmt.Errorf("%s: permission fields cannot be blank", key))
-		return nil
-	}
 
 	rabbitapi, err := c.cloudamqpBarApi.GetInstanceInBarFromTags([]string{rabbit.Spec.InstanceType})
 	if err != nil {
-		c.updateRabbitStatus(rabbit, true, ErrRabbitAPIFailure)
+		err2 := c.updateRabbitStatus(rabbit, "error", ErrRabbitAPIFailure)
+		if err2 != nil {
+			return err2
+		}
 		c.recorder.Event(rabbit, corev1.EventTypeWarning, ErrRabbitAPIFailure, err.Error())
 		return err
 	}
@@ -293,13 +290,13 @@ func (c *Controller) syncHandler(ctx context.Context, key string) error {
 	secret, err := c.secretsLister.Secrets(namespace).Get(secretName)
 
 	// If the secret resource doesn't exist, we'll create the RabbitMQ user and create the secret
-	var password string
-	if rabbit.Spec.Password.Type == "random" {
-		password = util.GenerateRandomString(24)
-	} else {
-		password = rabbit.Spec.Password.Value
-	}
 	if errors.IsNotFound(err) {
+		var password string
+		if rabbit.Spec.Password.Type == "random" {
+			password = util.GenerateRandomString(24)
+		} else {
+			password = rabbit.Spec.Password.Value
+		}
 		tags := "management"
 		logger.Info("Creating user", "InstanceType", instanceType, "Username", username, "Tags", tags, "Password", password[0:3]+"...")
 		c.createRabbitUserAndSetPermissions(ctx, rabbitapi, &RabbitUserCreation{
@@ -332,26 +329,21 @@ func (c *Controller) syncHandler(ctx context.Context, key string) error {
 
 	// Finally, we update the status block of the Rabbit resource to reflect the
 	// current state of the world
-	err = c.updateRabbitStatus(rabbit, false, "")
+	err = c.updateRabbitStatus(rabbit, "synced", "")
 	if err != nil {
 		return err
 	}
-
 	c.recorder.Event(rabbit, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
 	return nil
 }
 
-func (c *Controller) updateRabbitStatus(rabbit *samplev1alpha1.Rabbit, isErr bool, errMsg string) error {
+func (c *Controller) updateRabbitStatus(rabbit *samplev1alpha1.Rabbit, current, errMsg string) error {
 	// NEVER modify objects from the store. It's a read-only, local cache.
 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
 	// Or create a copy manually for better performance
 	rabbitCopy := rabbit.DeepCopy()
-	rabbitCopy.Status.Error = isErr
+	rabbitCopy.Status.Current = current
 	rabbitCopy.Status.ErrorMessage = errMsg
-	// If the CustomResourceSubresources feature gate is not enabled,
-	// we must use Update instead of UpdateStatus to update the Status block of the Rabbit resource.
-	// UpdateStatus will not allow changes to the Spec of the resource,
-	// which is ideal for ensuring nothing other than resource status has been updated.
 	_, err := c.sampleclientset.BrunozV1alpha1().Rabbits(rabbit.Namespace).UpdateStatus(context.TODO(), rabbitCopy, metav1.UpdateOptions{})
 	return err
 }

@@ -35,7 +35,7 @@ type RabbitPermissions struct {
 }
 
 type RabbitStatus struct {
-	Error        bool   `json:"error"`
+	Current      string `json:"current"`       // The expected statuses are: error, synced
 	ErrorMessage string `json:"errorMessage"`
 }
 

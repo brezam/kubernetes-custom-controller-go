@@ -1,4 +1,4 @@
-package main
+package controllers
 
 import (
 	samplev1alpha1 "bruno-zamariola/kubernetes-custom-controller/pkg/apis/rabbit/v1alpha1"

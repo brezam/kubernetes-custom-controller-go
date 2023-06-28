@@ -28,6 +28,7 @@ import (
 	// Uncomment the following line to load the gcp plugin (only required to authenticate against GKE clusters).
 	// _ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 
+	"bruno-zamariola/kubernetes-custom-controller/controllers"
 	clientset "bruno-zamariola/kubernetes-custom-controller/pkg/generated/clientset/versioned"
 	informers "bruno-zamariola/kubernetes-custom-controller/pkg/generated/informers/externalversions"
 	"bruno-zamariola/kubernetes-custom-controller/pkg/signals"
@@ -37,8 +38,6 @@ import (
 var (
 	// CloudAMQP credential flags
 	bar string
-	// Custom controller resync flags
-	resyncDuration time.Duration
 	// Kubernetes cluster connection flags
 	masterURL  string
 	kubeconfig string
@@ -77,10 +76,10 @@ func main() {
 		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
-	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, resyncDuration)
-	customControllerInformerFactory := informers.NewSharedInformerFactory(controllerClient, resyncDuration)
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, 1*time.Minute)
+	customControllerInformerFactory := informers.NewSharedInformerFactory(controllerClient, 1*time.Minute)
 
-	controller := NewController(ctx, cloudamqpBarApi, kubeClient, controllerClient,
+	controller := controllers.NewController(ctx, cloudamqpBarApi, kubeClient, controllerClient,
 		kubeInformerFactory.Core().V1().Secrets(),
 		customControllerInformerFactory.Brunoz().V1alpha1().Rabbits())
 
@@ -97,7 +96,6 @@ func main() {
 
 func init() {
 	flag.StringVar(&bar, "bar", "", "Bar.")
-	flag.DurationVar(&resyncDuration, "resyncPeriod", 1*time.Minute, "Resync period in for custom controller informer.")
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
 	flag.StringVar(&masterURL, "master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
 }
